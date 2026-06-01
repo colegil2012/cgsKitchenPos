@@ -9,8 +9,8 @@ returns.
 
 ## Why this architecture
 
-The driver kiosk already runs Chromium fullscreen on labwc, loading a local
-web app. This POS reuses that exact stack — a second Pi provisioned the same
+The driver kiosk for the general store already runs Chromium fullscreen on labwc, 
+loading a local web app. This POS reuses that exact stack — a second Pi provisioned the same
 way, only the launched URL differs. No new device class, one provisioning
 playbook. The POS is **standalone**: it only consumes cgsKitchen endpoints,
 caches data locally, and POSTs updates. New data needs become new endpoints
