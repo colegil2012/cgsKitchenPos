@@ -21,9 +21,12 @@
   --color-orange-dim:  #a85400;  /* POS addition: pressed CTA */
   --color-grass:       #5A823C;  /* success / paid */
   --color-grass-dim:   #486831;  /* POS addition: pressed success */
+  --color-grass-dark:  #1d4f1e;
   --color-honey:       #F4C866;
   --color-gold-dark:   #e6ac00;  /* price / highlight */
   --color-gold-darker: #b38600;
+  --color-sea:         #2f6f7e; 
+  --color-brown:       #7a4a28;
 
   --color-success:    #5A823C;
   --color-warn:       #C77D11;

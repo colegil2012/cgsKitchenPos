@@ -3,6 +3,8 @@ import {ref} from 'vue';
 import {useCartStore} from '../stores/cart';
 import {useConnectivityStore} from '../stores/connectivity';
 import {useSyncStore} from '../stores/sync';
+import {useEventStore} from '../stores/event';
+import {lookupCustomer} from '../api/client';
 import {
   selectionSummary,
   unitPriceCents,
@@ -19,18 +21,62 @@ const emit = defineEmits<{
 const cart = useCartStore();
 const connectivity = useConnectivityStore();
 const sync = useSyncStore();
+const eventStore = useEventStore();
 const submitting = ref(false);
+
+// ---- optional customer attachment (email lookup) ----
+const showLookup = ref(false);
+const email = ref('');
+const looking = ref(false);
+const lookupMsg = ref<string | null>(null);
+const attached = ref<{userId: string; customerName: string | null} | null>(null);
+
+async function doLookup() {
+  const e = email.value.trim();
+  if (!e) return;
+  looking.value = true;
+  lookupMsg.value = null;
+  try {
+    const match = await lookupCustomer(e);
+    if (match) {
+      attached.value = {userId: match.userId, customerName: match.displayName};
+      lookupMsg.value = null;
+    } else {
+      attached.value = null;
+      lookupMsg.value = 'No registered customer with that email.';
+    }
+  } catch {
+    lookupMsg.value = 'Lookup failed — check the connection.';
+  } finally {
+    looking.value = false;
+  }
+}
+
+function clearCustomer() {
+  attached.value = null;
+  email.value = '';
+  lookupMsg.value = null;
+  showLookup.value = false;
+}
 
 async function payCash() {
   if (cart.lines.length === 0) return;
+  // No live event → no valid eventId → the server would reject the order.
+  // Block at the UI with a clear message rather than letting it fail.
+  if (!eventStore.activeEventId) {
+    return;
+  }
   submitting.value = true;
   try {
     const total = cart.totalCents;
-    const req = cart.toOrderRequest();
-    // Cash always succeeds locally: enqueue durably, flush if online.
+    // Capture the active eventId at ring-up. For offline orders this rides
+    // in the queued op, binding the sale to its event even if flushed later.
+    // attached (if set) attributes the sale to a registered customer.
+    const req = cart.toOrderRequest(eventStore.activeEventId, attached.value);
     await sync.enqueueCashOrder(req);
     const queued = !connectivity.online || sync.pendingCount > 0;
     cart.clear();
+    clearCustomer();
     emit('paid', {queued, totalCents: total});
   } finally {
     submitting.value = false;
@@ -83,13 +129,46 @@ async function payCash() {
         <div class="row"><span>Subtotal</span><span>{{ money(cart.subtotalCents) }}</span></div>
         <div class="row"><span>Tax (7%)</span><span>{{ money(cart.taxCents) }}</span></div>
         <div class="row grand"><span>Total</span><span class="gv">{{ money(cart.totalCents) }}</span></div>
+
+        <!-- Optional customer attachment -->
+        <div class="customer">
+          <div v-if="attached" class="cust-attached">
+            <span class="cust-name">
+              ✓ {{ attached.customerName || 'Registered customer' }}
+            </span>
+            <button class="cust-clear" @click="clearCustomer">Remove</button>
+          </div>
+          <template v-else>
+            <button v-if="!showLookup" class="cust-add" @click="showLookup = true">
+              + Attach customer
+            </button>
+            <div v-else class="cust-lookup">
+              <input
+                v-model="email"
+                class="cust-input"
+                type="email"
+                placeholder="Customer email"
+                @keyup.enter="doLookup" />
+              <button class="cust-go" :disabled="looking" @click="doLookup">
+                {{ looking ? '…' : 'Find' }}
+              </button>
+              <button class="cust-cancel" @click="clearCustomer">✕</button>
+            </div>
+            <p v-if="lookupMsg" class="cust-msg">{{ lookupMsg }}</p>
+          </template>
+        </div>
+
         <p v-if="!connectivity.online" class="offline-note">
           Offline — order will be saved and synced when the connection returns.
+        </p>
+        <p v-if="!eventStore.activeEventId" class="no-event-note">
+          No active event — activate one on the Events tab before taking orders.
         </p>
         <AppButton
           :label="`Pay Cash · ${money(cart.totalCents)}`"
           variant="success"
           :loading="submitting"
+          :disabled="!eventStore.activeEventId"
           @click="payCash" />
       </div>
     </template>
@@ -232,6 +311,78 @@ async function payCash() {
 .offline-note {
   font-size: 13px;
   color: var(--color-gold-dark);
+  text-align: center;
+  margin: 0 0 12px;
+}
+.customer {
+  margin: 12px 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border);
+}
+.cust-add {
+  background: transparent;
+  color: var(--color-orange);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 4px 0;
+}
+.cust-lookup {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.cust-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 14px;
+  background: var(--color-white);
+  color: var(--color-ink);
+}
+.cust-go {
+  min-height: 40px;
+  padding: 0 16px;
+  background: var(--color-orange);
+  color: var(--color-white);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 14px;
+}
+.cust-go:disabled {
+  opacity: 0.5;
+}
+.cust-cancel {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 16px;
+}
+.cust-attached {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cust-name {
+  color: var(--color-grass);
+  font-weight: 600;
+  font-size: 14px;
+}
+.cust-clear {
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 13px;
+}
+.cust-msg {
+  font-size: 13px;
+  color: var(--color-muted);
+  margin: 8px 0 0;
+}
+.no-event-note {
+  font-size: 13px;
+  color: var(--color-danger);
   text-align: center;
   margin: 0 0 12px;
 }

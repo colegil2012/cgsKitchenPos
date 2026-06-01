@@ -109,8 +109,8 @@ function toggle(choiceId: string, available: boolean) {
   color: var(--color-ink);
 }
 .choice.sel {
-  background: var(--color-orange);
-  border-color: var(--color-orange);
+  background: var(--color-gold-darker);
+  border-color: var(--color-gold-darker);
   color: var(--color-white);
 }
 .choice.unavail {

@@ -141,7 +141,7 @@ onUnmounted(() => orders.stopPolling());
   font-size: 13px;
   font-weight: 700;
   color: var(--color-white);
-  background: var(--color-orange);
+  background: var(--color-gold-dark);
   min-width: 22px;
   height: 22px;
   border-radius: var(--radius-full);

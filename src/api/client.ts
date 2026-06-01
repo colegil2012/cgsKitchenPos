@@ -8,9 +8,9 @@ import type {
 
 export class ApiError extends Error {
   constructor(
-      message: string,
-      public status: number,
-      public body?: unknown,
+    message: string,
+    public status: number,
+    public body?: unknown,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -51,10 +51,10 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   } catch (e: any) {
     const aborted = e?.name === 'AbortError';
     throw new ApiError(
-        aborted
-            ? `Request to ${path} timed out`
-            : `Network request to ${path} failed`,
-        0,
+      aborted
+        ? `Request to ${path} timed out`
+        : `Network request to ${path} failed`,
+      0,
     );
   } finally {
     clearTimeout(timer);
@@ -72,9 +72,9 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
   if (!res.ok) {
     const msg =
-        parsed && typeof parsed === 'object' && 'message' in (parsed as any)
-            ? String((parsed as any).message)
-            : `Request to ${path} failed (${res.status})`;
+      parsed && typeof parsed === 'object' && 'message' in (parsed as any)
+        ? String((parsed as any).message)
+        : `Request to ${path} failed (${res.status})`;
     throw new ApiError(msg, res.status, parsed);
   }
   return parsed as T;
@@ -82,8 +82,13 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
 // ---- Endpoints -----------------------------------------------------------
 
+/**
+ * GET /api/menu/menu — available menu items for ordering. Lives on the
+ * authed chain (the old public /api/public/menu was consolidated into the
+ * POS menu controller), so it carries the API key like the other POS calls.
+ */
 export function fetchMenu(signal?: AbortSignal): Promise<MenuItemView[]> {
-  return request<MenuItemView[]>('/api/public/menu', {auth: false, signal});
+  return request<MenuItemView[]>('/api/menu/menu', {signal});
 }
 
 export function createPosOrder(body: PosOrderRequest): Promise<OrderView> {
@@ -91,9 +96,9 @@ export function createPosOrder(body: PosOrderRequest): Promise<OrderView> {
 }
 
 export function updateOrderStatus(
-    orderId: string,
-    status: string,
-    note?: string,
+  orderId: string,
+  status: string,
+  note?: string,
 ): Promise<OrderView> {
   const body: UpdateStatusRequest = {
     status,
@@ -118,8 +123,8 @@ export function fetchActiveOrders(signal?: AbortSignal): Promise<OrderView[]> {
  * rather than the kitchen-matrix /status path.
  */
 export function confirmCashPayment(
-    orderId: string,
-    note?: string,
+  orderId: string,
+  note?: string,
 ): Promise<OrderView> {
   return request<OrderView>(`/api/orders/${orderId}/cash-payment`, {
     method: 'POST',
@@ -134,5 +139,146 @@ export async function heartbeat(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+// ---- Inventory (menu availability) --------------------------------------
+
+/** GET /api/menu/all — full menu including 86'd items (key-auth). */
+export function fetchAllMenu(signal?: AbortSignal): Promise<MenuItemView[]> {
+  return request<MenuItemView[]>('/api/menu/all', {signal});
+}
+
+/** POST /api/menu/items/{id}/availability — 86 / un-86 a menu item. */
+export function setItemAvailability(
+  itemId: string,
+  available: boolean,
+): Promise<MenuItemView> {
+  return request<MenuItemView>(`/api/menu/items/${itemId}/availability`, {
+    method: 'POST',
+    body: {available},
+  });
+}
+
+export interface ChoiceAvailabilityResult {
+  id: string;
+  label: string;
+  available: boolean;
+  unavailableReason: string | null;
+}
+
+/** POST /api/menu/choices/{id}/availability — 86 / un-86 an option choice. */
+export function setChoiceAvailability(
+  choiceId: string,
+  available: boolean,
+  reason?: string,
+): Promise<ChoiceAvailabilityResult> {
+  return request<ChoiceAvailabilityResult>(
+    `/api/menu/choices/${choiceId}/availability`,
+    {method: 'POST', body: {available, reason: reason ?? null}},
+  );
+}
+
+// ---- Events (active / next / activate) ----------------------------------
+
+export interface EventView {
+  id: string;
+  title: string;
+  location: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  active: boolean;
+  recurring: boolean;
+  recurrenceLabel: string | null;
+  canActivate: boolean;
+}
+
+export interface EventStatusView {
+  eventLive: boolean;
+  active: EventView | null;
+  next: EventView | null;
+}
+
+/** GET /api/events/status — live event + next scheduled, for the POS. */
+export function fetchEventStatus(signal?: AbortSignal): Promise<EventStatusView> {
+  return request<EventStatusView>('/api/events/status', {signal});
+}
+
+/** POST /api/events/{id}/activate — operator activates an event. */
+export function activateEvent(eventId: string): Promise<EventView> {
+  return request<EventView>(`/api/events/${eventId}/activate`, {method: 'POST'});
+}
+
+// ---- Event summary (per-event sales reporting) --------------------------
+
+export interface SummaryOrderLine {
+  orderId: string;
+  customerName: string | null;
+  paymentMethod: string; // CASH | CARD | OTHER | UNPAID
+  fulfillment: string | null;
+  status: string | null;
+  totalCents: number;
+  countedInTotal: boolean;
+}
+
+export interface SummaryIncome {
+  totalCents: number;
+  cashCents: number;
+  cardCents: number;
+  otherCents: number;
+  countedOrders: number;
+  totalOrders: number;
+  orders: SummaryOrderLine[];
+}
+
+export interface SummaryItemVariant {
+  modifiers: string[];
+  quantity: number;
+  revenueCents: number;
+}
+
+export interface SummaryItemSold {
+  name: string;
+  quantity: number;
+  revenueCents: number;
+  variants: SummaryItemVariant[];
+}
+
+export interface EventSummary {
+  eventId: string;
+  income: SummaryIncome;
+  itemsSold: SummaryItemSold[];
+}
+
+/** GET /api/events/{id}/summary — backend-computed sales report. */
+export function fetchEventSummary(
+  eventId: string,
+  signal?: AbortSignal,
+): Promise<EventSummary> {
+  return request<EventSummary>(`/api/events/${eventId}/summary`, {signal});
+}
+
+// ---- Customer lookup (attach a POS order to a registered user) ----------
+
+export interface CustomerMatch {
+  userId: string;
+  displayName: string | null;
+}
+
+/**
+ * GET /api/pos/customers/lookup?email= — resolve an email to a registered
+ * user. Resolves to the match, or null when there's no registered customer
+ * with that email (the endpoint 404s, which we translate to null here).
+ */
+export async function lookupCustomer(
+  email: string,
+): Promise<CustomerMatch | null> {
+  try {
+    return await request<CustomerMatch>(
+      `/api/pos/customers/lookup?email=${encodeURIComponent(email)}`,
+    );
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
   }
 }

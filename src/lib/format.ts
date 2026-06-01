@@ -11,3 +11,16 @@ export function clientId(prefix = 'op'): string {
     .toString(36)
     .slice(2, 8)}`;
 }
+
+const BADGE_COLORS: Record<string, string> = {
+  gold: 'var(--color-gold-dark)',
+  grass: 'var(--color-grass)',
+  sea: 'var(--color-sea)',
+  brown: 'var(--color-brown)',
+};
+ 
+export function badgeColor(token: string | null | undefined): string {
+  if (!token) return 'var(--color-gold-dark)';
+  return BADGE_COLORS[token.toLowerCase()] ?? 'var(--color-gold-dark)';
+}
+

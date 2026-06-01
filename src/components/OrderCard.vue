@@ -71,7 +71,7 @@ const ageMin = computed(() => {
 <style scoped>
 .card {
   background: var(--color-white);
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--color-ink);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   padding: 12px;
@@ -138,7 +138,7 @@ const ageMin = computed(() => {
 }
 .advance {
   flex: 1;
-  background: var(--color-grass);
+  background: var(--color-grass-dark);
   color: var(--color-white);
   border-radius: var(--radius-sm);
   font-weight: 700;

@@ -36,8 +36,17 @@ export const useCartStore = defineStore('cart', () => {
     lines.value = [];
   }
 
-  function toOrderRequest(): PosOrderRequest {
-    return {items: lines.value.map(toPosLineItem)};
+  function toOrderRequest(
+    eventId: string | null,
+    customer?: {userId: string; customerName: string | null} | null,
+  ): PosOrderRequest {
+    return {
+      items: lines.value.map(toPosLineItem),
+      eventId,
+      userId: customer?.userId ?? null,
+      customerName: customer?.customerName ?? null,
+      customerEmail: null,
+    };
   }
 
   return {

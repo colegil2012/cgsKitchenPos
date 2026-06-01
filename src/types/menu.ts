@@ -1,7 +1,7 @@
 /**
  * TS mirror of the cgsKitchen backend contract.
  *
- *  - MenuItemView / OptionGroupView / OptionChoiceView  <- GET /api/public/menu
+ *  - MenuItemView / OptionGroupView / OptionChoiceView  <- GET /api/menu/menu
  *  - PosLineItem / PosOrderRequest                      -> POST /api/pos/orders
  *  - OrderView                                          <- order endpoints
  *  - UpdateStatusRequest                                -> POST /api/orders/{id}/status
@@ -56,6 +56,13 @@ export interface PosLineItem {
 
 export interface PosOrderRequest {
   items: PosLineItem[];
+  /** The event this order belongs to. Captured at ring-up; stamped by
+   *  the server onto the Order. Required server-side (no orphaned orders). */
+  eventId: string | null;
+  /** Optional customer attachment (from email lookup). Null = walk-in. */
+  userId?: string | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
 }
 
 export interface OrderView {

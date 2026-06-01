@@ -3,17 +3,22 @@ import {ref, onMounted, watch} from 'vue';
 import type {MenuItemView} from './types/menu';
 import {useConnectivityStore} from './stores/connectivity';
 import {useSyncStore} from './stores/sync';
+import {useEventStore} from './stores/event';
 import StatusBadge from './components/StatusBadge.vue';
 import MenuView from './views/MenuView.vue';
 import OrdersView from './views/OrdersView.vue';
+import InventoryView from './views/InventoryView.vue';
 import ItemDetailView from './views/ItemDetailView.vue';
 import CartView from './views/CartView.vue';
 import PaidView from './views/PaidView.vue';
+import EventsView from './views/EventsView.vue';
+import logoUrl from './assets/header_logo.png';
 
-type Tab = 'menu' | 'orders';
+type Tab = 'menu' | 'orders' | 'inventory' | 'events';
 
 const connectivity = useConnectivityStore();
 const sync = useSyncStore();
+const eventStore = useEventStore();
 
 const tab = ref<Tab>('menu');
 const selectedItem = ref<MenuItemView | null>(null);
@@ -23,6 +28,7 @@ const paid = ref<{queued: boolean; totalCents: number} | null>(null);
 onMounted(async () => {
   await sync.refresh();
   connectivity.start();
+  eventStore.start();
 });
 
 watch(
@@ -33,17 +39,20 @@ watch(
 );
 
 const navItems: {key: Tab; label: string; icon: string}[] = [
-  {key: 'menu', label: 'Menu', icon: 'M3 4h14M3 9h14M3 14h9'},
+  {key: 'menu', label: 'Menu', icon: 'M10 4.5C8.5 3.5 5.5 3.5 4 4v10c1.5 -0.5 4.5 -0.5 6 0.5 1.5 -1 4.5 -1 6 -0.5V4c-1.5 -0.5 -4.5 -0.5 -6 0.5zM10 4.5v10'},
   {key: 'orders', label: 'Orders', icon: 'M4 3h10l2 3v11H4zM7 8h6M7 11h6M7 14h4'},
+  {key: 'inventory', label: 'Inventory', icon: 'M6 6V5a2 2 0 0 1 4 0v1M6 6h8l1 10H5zM7 6V5a3 3 0 0 1 6 0v1'},
+  {key: 'events', label: 'Events', icon: 'M4 5h12v11H4zM4 8h12M7 3v3M13 3v3M7 11h2M11 11h2'},
 ];
 </script>
+
 
 <template>
   <div class="app">
     <nav class="rail">
       <div class="brand">
-        <div class="brand-name">CGS</div>
-        <div class="brand-sub">POS</div>
+        <img :src="logoUrl" class="header-logo" alt="Logo" />
+        <div class="brand-sub">POSI</div>
       </div>
 
       <div class="tabs">
@@ -74,6 +83,10 @@ const navItems: {key: Tab; label: string; icon: string}[] = [
 
       <OrdersView v-if="tab === 'orders'" />
 
+      <InventoryView v-if="tab === 'inventory'" />
+
+      <EventsView v-if="tab === 'events'" />
+
       <ItemDetailView
         v-if="selectedItem"
         :item="selectedItem"
@@ -98,6 +111,7 @@ const navItems: {key: Tab; label: string; icon: string}[] = [
   </div>
 </template>
 
+
 <style scoped>
 .app {
   height: 100%;
@@ -116,18 +130,16 @@ const navItems: {key: Tab; label: string; icon: string}[] = [
 .brand {
   text-align: center;
 }
-.brand-name {
-  font-family: var(--font-display);
-  font-size: 24px;
-  color: var(--color-paper);
-  line-height: 1;
-}
+.header-logo {
+  max-width: 70px;
+  max-height: auto;
+ }
 .brand-sub {
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-orange);
+  font-size: 13px;
+  color: var(--color-gold-dark);
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   margin-top: 2px;
 }
 .tabs {
@@ -148,7 +160,7 @@ const navItems: {key: Tab; label: string; icon: string}[] = [
   transition: background 0.12s ease, color 0.12s ease;
 }
 .tab.active {
-  background: var(--color-grass);
+  background: var(--color-grass-dark);
   color: var(--color-white);
 }
 .tab:not(.active):active {

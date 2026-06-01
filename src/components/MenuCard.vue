@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {MenuItemView} from '../types/menu';
-import {money} from '../lib/format';
+import {money, badgeColor} from '../lib/format';
 
 const props = defineProps<{item: MenuItemView}>();
 defineEmits<{(e: 'select', item: MenuItemView): void}>();
@@ -14,7 +14,7 @@ const hasOptions = props.item.optionGroups.length > 0;
       <span
         v-if="item.badgeLabel"
         class="badge"
-        :style="{background: item.badgeColor || 'var(--color-gold-dark)'}">
+        :style="{background: badgeColor(item.badgeColor)}">
         {{ item.badgeLabel.toUpperCase() }}
       </span>
       <span v-else />
@@ -36,14 +36,14 @@ const hasOptions = props.item.optionGroups.length > 0;
   min-height: 150px;
   padding: 16px;
   background: var(--color-white);
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--color-ink);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .card:active {
   background: var(--color-paper-3);
-  border-color: var(--color-orange);
+  border-color: var(--color-gold-darker);
 }
 .top {
   display: flex;
@@ -62,7 +62,7 @@ const hasOptions = props.item.optionGroups.length > 0;
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: 800;
-  color: var(--color-gold-dark);
+  color: var(--color-grass-dark);
 }
 .name {
   font-family: var(--font-display);
@@ -83,6 +83,6 @@ const hasOptions = props.item.optionGroups.length > 0;
   margin-top: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-orange);
+  color: var(--color-gold-darker);
 }
 </style>

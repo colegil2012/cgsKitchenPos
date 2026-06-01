@@ -58,13 +58,13 @@ export const useOrdersStore = defineStore('orders', () => {
     function nextStep(o: OrderView): NextStep | null {
         switch (o.status) {
             case 'PAID':
-                return {status: 'IN_KITCHEN', label: 'Start cooking'};
+                return {status: 'IN_KITCHEN', label: 'In Kitchen'};
             case 'IN_KITCHEN':
-                return {status: 'READY', label: 'Mark ready'};
+                return {status: 'READY', label: 'Ready'};
             case 'READY':
                 return o.fulfillment === 'DELIVERY'
                     ? {status: 'OUT_FOR_DELIVERY', label: 'Out for delivery'}
-                    : {status: 'COMPLETED', label: 'Complete order'};
+                    : {status: 'COMPLETED', label: 'Complete'};
             default:
                 return null;
         }

@@ -4,6 +4,7 @@ import {useMenuStore} from '../stores/menu';
 import {useCartStore} from '../stores/cart';
 import type {MenuItemView} from '../types/menu';
 import MenuCard from '../components/MenuCard.vue';
+import EventStatusStrip from '../components/EventStatusStrip.vue';
 import AppButton from '../components/AppButton.vue';
 import {money} from '../lib/format';
 
@@ -22,6 +23,7 @@ onMounted(() => {
 
 <template>
   <div class="view">
+    <EventStatusStrip />
     <div v-if="menu.stale" class="stale">
       Showing cached menu — may be out of date. Will refresh when back online.
     </div>
@@ -88,15 +90,19 @@ onMounted(() => {
 .body {
   flex: 1;
   padding-bottom: 120px;
-  padding-left: 16px;
 }
 .section {
-  margin-bottom: 16px;
+  padding-bottom: 22px;
 }
 .section-title {
   font-size: 22px;
-  color: var(--color-gold-dark);
-  padding: 16px 16px 4px;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  background: var(--color-paper-2);
+  border-bottom: 2px solid var(--color-ink);
+  border-top: 2px solid var(--color-ink);
+  padding: 18px;
+  margin-bottom: 22px;
 }
 .grid {
   display: grid;
@@ -132,7 +138,7 @@ onMounted(() => {
   width: 40px;
   height: 40px;
   border: 4px solid var(--color-paper-2);
-  border-top-color: var(--color-orange);
+  border-top-color: var(--color-grass-dark);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

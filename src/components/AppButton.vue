@@ -37,11 +37,11 @@ defineEmits<{(e: 'click'): void}>();
   transform: scale(0.98);
 }
 .btn--primary {
-  background: var(--color-orange);
+  background: var(--color-grass-dark);
   color: var(--color-white);
 }
 .btn--success {
-  background: var(--color-grass);
+  background: var(--color-grass-dark);
   color: var(--color-white);
 }
 .btn--ghost {
