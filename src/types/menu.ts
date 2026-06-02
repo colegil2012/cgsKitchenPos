@@ -52,6 +52,7 @@ export interface PosLineItem {
   name: string;
   quantity: number;
   unitPriceCents: number;
+  modifiers?: string[]; // for future use: flattened choice labels for display/reference; not sent to server yet
 }
 
 export interface PosOrderRequest {

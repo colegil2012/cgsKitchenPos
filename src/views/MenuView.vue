@@ -98,9 +98,9 @@ onMounted(() => {
   font-size: 22px;
   color: var(--color-ink);
   font-family: var(--font-display);
-  background: var(--color-paper-2);
-  border-bottom: 2px solid var(--color-ink);
-  border-top: 2px solid var(--color-ink);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: var(--color-paper);
   padding: 18px;
   margin-bottom: 22px;
 }
