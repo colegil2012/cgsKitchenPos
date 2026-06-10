@@ -19,4 +19,4 @@ exec chromium \
   --force-device-scale-factor=1 \
   --disable-session-crashed-bubble \
   --disable-popup-blocking \
-  --app=file:///home/druid-pos/celtech-pos/dist/index.html
+  --app=file:///home/druid-pos/cgsKitchenPos/dist/index.html
