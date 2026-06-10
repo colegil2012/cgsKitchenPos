@@ -16,8 +16,8 @@
 
 set -e
 
-APP_DIR="/home/druid-mobile/celtech-pos"
-LOG_FILE="/home/druid-mobile/update.log"
+APP_DIR="/home/druid-pos/cgsKitchenPos"
+LOG_FILE="/home/druid-pos/update.log"
 ENV_FILE="/etc/celtech/env"
 ENV_OUT="$APP_DIR/.env"
 BRANCH="main"
