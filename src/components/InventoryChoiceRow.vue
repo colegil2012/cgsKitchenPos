@@ -58,9 +58,6 @@ function toggle() {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
 }
 .choice.off {
   background: var(--color-paper-2);

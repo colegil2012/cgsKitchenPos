@@ -47,7 +47,7 @@ onMounted(() => {
           :key="section.categoryName"
           class="section">
           <h3 class="section-title">{{ section.categoryName }}</h3>
-          <div class="rows">
+          <div class="menu-grid">
             <InventoryItemRow
               v-for="item in section.items"
               :key="item.id"
@@ -58,13 +58,13 @@ onMounted(() => {
  
       <!-- ============ CHOICES ============ -->
       <div class="block" v-if="inventory.choiceGroups.length">
-        <h2 class="block-title">Choices</h2>
+        <h2 class="block-title">Inventory Items</h2>
         <section
           v-for="group in inventory.choiceGroups"
           :key="group.id"
           class="section">
           <h3 class="section-title">{{ group.label }}</h3>
-          <div class="rows">
+          <div class="choice-grid">
             <InventoryChoiceRow
               v-for="choice in group.choices"
               :key="choice.id"
@@ -137,18 +137,39 @@ onMounted(() => {
   flex: 1;
   padding: 0 16px 24px;
 }
+.block-title {
+  font-size: var(--fs-3xl);
+  color: var(--color-gold-dark);
+  border-left: 4px solid var(--color-grass-dark);
+  padding: 24px 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 .section {
-  margin-top: 16px;
+  margin-bottom: 24px;
 }
 .section-title {
   font-size: var(--fs-2xl);
-  color: var(--color-gold-dark);
-  margin-bottom: 8px;
+  color: var(--color-ink);
+  background: var(--color-paper-2);
+  border-bottom: 2px solid var(--color-grass-dark);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  padding: 12px;
+  text-transform: uppercase;
+  margin-top: 16px;
+  letter-spacing: 0.05em;
 }
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.menu-grid {
+  display: grid;
+  background: var(--color-white);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  grid-template-columns: repeat(1, 1fr);
+}
+.choice-grid {
+  display: grid;
+  background: var(--color-white);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  grid-template-columns: repeat(2, 1fr);
 }
 .spinner {
   width: 40px;

@@ -1,4 +1,4 @@
-# CGS POS — Vue web terminal for cgsKitchen
+# CGS Kitchen POS — Vue web terminal for cgsKitchen
 
 Standalone front-of-house POS for the food truck, built as a static web app
 that runs in the **same Chromium-kiosk-on-a-Pi** pattern as the driver unit.
@@ -73,9 +73,11 @@ on a connectivity drop.
 
 ### Ordering (cash)
 Menu grouped by category with item options (single/multi, required, 86-aware).
-Cash checkout queues durably and confirms payment via the dedicated
-`/cash-payment` endpoint. An order can optionally be attached to a registered
-customer via email lookup; skipped, it's a walk-in.
+Selected options are folded into the line price and sent as a structured
+`modifiers` array (clean item name), so they persist the same way web orders do
+and show on the kitchen board. Cash checkout queues durably and confirms payment
+via the dedicated `/cash-payment` endpoint. An order can optionally be attached
+to a registered customer via email lookup; skipped, it's a walk-in.
 
 ### Kitchen order board
 A three-column board (New -> In Kitchen -> Ready) backed by
@@ -128,13 +130,30 @@ toggles, event activation, and the summary are all **online-only** by design —
 each is shared mutable state where a stale, late-replayed action would be
 wrong, unlike an additive cash-sale record.
 
-## The flattening
+## Line items & modifiers
 
-`POST /api/pos/orders` takes a flat `PosLineItem` with no options field, so
-each configured cart line is flattened in `toPosLineItem()` (`src/lib/cart.ts`):
-deltas folded into `unitPriceCents`, choice labels appended to `name`
-(`"Lamb Gyro (Cheddar, +Mint sauce)"`). One change point if the DTO later
-grows structured options.
+`POST /api/pos/orders` takes a `PosLineItem` carrying the item plus a
+structured `modifiers` array, so a configured cart line maps cleanly in
+`toPosLineItem()` (`src/lib/cart.ts`): option price **deltas are folded into
+`unitPriceCents`**, and the selected choices go in `modifiers` as
+`"Group: Choice"` labels (e.g. `["Meat: Beef", "Cheese: Beer cheese"]`). The
+item `name` stays clean — just `"Shepherd's Fries"`, no parenthetical.
+
+This matches the storefront (web) order shape exactly, so a POS order and a web
+order for the same items persist **byte-identically** in Mongo: clean name,
+populated `modifiers`, deltas in `unitPriceCents`. The kitchen board and event
+summary read modifiers from this field directly.
+
+> **History.** Earlier this DTO had no options field, so modifiers were
+> *flattened into the name* (`"Lamb Gyro (Cheddar, +Mint sauce)"`). That was a
+> deliberate stopgap. It's gone: `PosLineItem` (both the Vue type and the
+> backend record in `PosApiController`) now has `modifiers: List<String>`, and
+> `createPosOrder` maps it onto `Order.LineItem.modifiers`. Note that
+> `selectionSummary()` still exists in `cart.ts` but is used **for on-screen
+> display only** (the cart screen's options line) — never for submission, which
+> uses `selectionLabels()`. Legacy POS orders created before this change still
+> carry modifiers in their `name` with `modifiers: null`; the kitchen board
+> falls back to parsing the name parenthetical for those, so they still render.
 
 ## Project layout
 
@@ -143,7 +162,7 @@ src/
   api/client.ts            fetch wrapper + all endpoints + heartbeat
   lib/config.ts            Vite env config + HEARTBEAT_PATH
   lib/db.ts                IndexedDB wrapper (kv + queue stores)
-  lib/cart.ts              pricing, validation, FLATTENING (framework-agnostic)
+  lib/cart.ts              pricing, validation, line-item mapping (framework-agnostic)
   lib/format.ts            money(), clientId(), badgeColor()
   stores/connectivity.ts   heartbeat polling
   stores/sync.ts           durable write queue + flush

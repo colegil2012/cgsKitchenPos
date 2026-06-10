@@ -39,7 +39,23 @@ function fmtWindow(startAt: string | null, endAt: string | null): string {
 
 async function onActivate() {
   if (!next.value) return;
-  await eventStore.activate(next.value.id);
+  await eventStore.activate(next.value);
+}
+
+async function onCloseShift() {
+  const confirmed = window.confirm(
+    'Close this shift? Orders already taken stay recorded, but no new ' +
+    'orders (including late offline ones) will attach after closing.',
+  );
+  if (!confirmed) return;
+  await eventStore.close();
+}
+
+async function onToggleOrdering() {
+  const live = eventStore.live;
+  if (!live) return;
+  // Toggle the stored switch to the opposite of its current value.
+  await eventStore.setOnlineOrdering(!live.onlineOrderingOpen);
 }
 
 // ---- summary (when event live) ----
@@ -102,7 +118,7 @@ onUnmounted(() => {
     <header class="bar">
       <h2 class="title">Events</h2>
       <button class="refresh tap" aria-label="Refresh"
-        @click="live ? (live && summaryStore.load(live.id)) : eventStore.load(true)">
+        @click="live?.id ? summaryStore.load(live.id!) : eventStore.load(true)">
         ↻
       </button>
     </header>
@@ -119,13 +135,42 @@ onUnmounted(() => {
           <div class="status-row">
             <span class="dot" />
             <span class="status-label">Live now</span>
+            <span
+              class="ordering-pill"
+              :class="eventStore.customerOrderingOpen ? 'ordering-pill--open' : 'ordering-pill--closed'">
+              {{ eventStore.customerOrderingOpen
+                ? 'Online ordering open'
+                : 'Online ordering closed — flush only' }}
+            </span>
           </div>
           <div class="ev-title">{{ live.title }}</div>
           <div v-if="live.location" class="ev-loc">{{ live.location }}</div>
           <div class="ev-window">{{ fmtWindow(live.startAt, live.endAt) }}</div>
-          <div v-if="live.recurring && live.recurrenceLabel" class="ev-recur">
-            {{ live.recurrenceLabel }}
+          <div v-if="live.fromSeries" class="ev-recur">
+            Weekly
           </div>
+          <div class="header-actions">
+            <button
+              class="ordering-toggle tap"
+              :class="live.onlineOrderingOpen ? 'ordering-toggle--on' : 'ordering-toggle--off'"
+              :disabled="eventStore.toggling || !connectivity.online"
+              @click="onToggleOrdering">
+              {{ eventStore.toggling
+                ? 'Updating…'
+                : (live.onlineOrderingOpen
+                    ? 'Turn online ordering off'
+                    : 'Turn online ordering on') }}
+            </button>
+            <button
+              class="close-shift tap"
+              :disabled="eventStore.closing || !connectivity.online"
+              @click="onCloseShift">
+              {{ eventStore.closing ? 'Closing…' : 'Close shift' }}
+            </button>
+          </div>
+          <p v-if="!connectivity.online" class="hint">
+            Offline — reconnect to manage the shift
+          </p>
         </section>
 
         <div class="dash-grid">
@@ -245,10 +290,9 @@ onUnmounted(() => {
           <div class="ev-title">{{ next.title }}</div>
           <div v-if="next.location" class="ev-loc">{{ next.location }}</div>
           <div class="ev-window">
-            {{ next.recurring && next.recurrenceLabel
-              ? next.recurrenceLabel
-              : fmtWindow(next.startAt, next.endAt) }}
+            {{ next.startAt ? fmtWindow(next.startAt, next.endAt) : 'Next scheduled slot' }}
           </div>
+          <div v-if="next.fromSeries" class="ev-recur">Weekly</div>
           <button
             class="activate tap"
             :disabled="!eventStore.canActivateNext || eventStore.activating || !connectivity.online"
@@ -305,7 +349,7 @@ onUnmounted(() => {
 
 /* header */
 .header-card { border-color: var(--color-grass); text-align: center; margin-bottom: 16px; }
-.status-row { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .dot {
   width: 9px; height: 9px; border-radius: 50%;
   background: var(--color-grass); animation: pulse 2s ease-in-out infinite;
@@ -414,4 +458,57 @@ onUnmounted(() => {
   font-family: var(--font-mono); font-size: 11px; color: var(--color-muted);
   text-align: center; margin: 16px 0 0;
 }
+
+/* Online-ordering indicator pill in the live header */
+.ordering-pill {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+}
+.ordering-pill--open {
+  background: var(--color-grass, #5a823c); color: var(--color-white);
+}
+.ordering-pill--closed {
+  background: var(--color-paper-2, #eee); color: var(--color-muted);
+  border: 1px solid var(--color-border, #ccc);
+}
+
+/* Action row in the live header (toggle + close) */
+.header-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+/* Online-ordering toggle button */
+.ordering-toggle {
+  min-height: 48px; flex: 1 1 200px; max-width: 280px;
+  border-radius: var(--radius-md); font-family: var(--font-display);
+  font-size: 16px; font-weight: 700;
+}
+.ordering-toggle--on {
+  /* currently ON → button offers to turn OFF (cautionary look) */
+  background: transparent; color: var(--color-ink);
+  border: 2px solid var(--color-border, #ccc);
+}
+.ordering-toggle--off {
+  /* currently OFF → button offers to turn ON (affirmative look) */
+  background: var(--color-grass, #5a823c); color: var(--color-white);
+  border: 2px solid var(--color-grass, #5a823c);
+}
+.ordering-toggle:disabled { opacity: 0.4; }
+
+/* Close-shift button on the live dashboard */
+.close-shift {
+  min-height: 48px; flex: 1 1 200px; max-width: 280px;
+  background: transparent; color: var(--color-danger, #b23);
+  border: 2px solid var(--color-danger, #b23);
+  border-radius: var(--radius-md); font-family: var(--font-display);
+  font-size: 16px; font-weight: 700;
+}
+.close-shift:disabled { opacity: 0.4; }
+
 </style>

@@ -182,31 +182,78 @@ export function setChoiceAvailability(
 // ---- Events (active / next / activate) ----------------------------------
 
 export interface EventView {
-  id: string;
+  /** Concrete event id. Null for a series *projection* (a not-yet-
+   *  materialized future occurrence) — in that case activate via seriesId. */
+  id: string | null;
+  /** Set when this view is a series occurrence or projection. */
+  seriesId: string | null;
   title: string;
   location: string | null;
   startAt: string | null;
   endAt: string | null;
   active: boolean;
-  recurring: boolean;
-  recurrenceLabel: string | null;
+  /** True if this came from a recurring series (occurrence or projection). */
+  fromSeries: boolean;
+  /** Stored online-ordering switch for this occurrence. Distinct from the
+   *  derived customerOrderingOpen — this is the operator override (false =
+   *  private / walk-in-only, or switched off live). POS ring-up is
+   *  unaffected either way. */
+  onlineOrderingOpen: boolean;
   canActivate: boolean;
 }
 
 export interface EventStatusView {
-  eventLive: boolean;
+  /** Operator-open: a shift is active (may be past its customer window). */
+  shiftLive: boolean;
+  /** Customer-open: within the scheduled window right now (online ordering). */
+  customerOrderingOpen: boolean;
   active: EventView | null;
   next: EventView | null;
 }
 
-/** GET /api/events/status — live event + next scheduled, for the POS. */
+/** GET /api/events/status — live shift + next scheduled, for the POS. */
 export function fetchEventStatus(signal?: AbortSignal): Promise<EventStatusView> {
   return request<EventStatusView>('/api/events/status', {signal});
 }
 
-/** POST /api/events/{id}/activate — operator activates an event. */
+/**
+ * POST /api/events/{id}/activate — activate a one-time concrete event.
+ * For recurring series use {@link activateSeries} instead (the projection
+ * has no concrete id until activation materializes one).
+ */
 export function activateEvent(eventId: string): Promise<EventView> {
   return request<EventView>(`/api/events/${eventId}/activate`, {method: 'POST'});
+}
+
+/**
+ * POST /api/events/series/{seriesId}/activate — materialize + activate the
+ * current-slot occurrence of a recurring series. (Path lives under
+ * /api/events/** so it's covered by the API-key security chain.) Returns
+ * the concrete occurrence EventView (now with a real id).
+ */
+export function activateSeries(seriesId: string): Promise<EventView> {
+  return request<EventView>(`/api/events/series/${seriesId}/activate`, {method: 'POST'});
+}
+
+/** POST /api/events/{id}/close — operator closes the open shift. */
+export function closeShift(eventId: string): Promise<EventView> {
+  return request<EventView>(`/api/events/${eventId}/close`, {method: 'POST'});
+}
+
+/**
+ * POST /api/events/{id}/online-ordering — switch online ordering on/off for
+ * the live occurrence. Explicit set (idempotent). Turning it off stops
+ * customer web orders while leaving POS ring-up fully working. Returns the
+ * updated EventView.
+ */
+export function setOnlineOrdering(
+  eventId: string,
+  enabled: boolean,
+): Promise<EventView> {
+  return request<EventView>(`/api/events/${eventId}/online-ordering`, {
+    method: 'POST',
+    body: {enabled},
+  });
 }
 
 // ---- Event summary (per-event sales reporting) --------------------------

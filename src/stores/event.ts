@@ -3,6 +3,9 @@ import {ref, computed} from 'vue';
 import {
     fetchEventStatus,
     activateEvent,
+    activateSeries,
+    closeShift,
+    setOnlineOrdering as apiSetOnlineOrdering,
     ApiError,
     type EventView,
 } from '../api/client';
@@ -27,6 +30,13 @@ const ACTIVATION_LEAD_MS = 15 * 60 * 1000;
 export const useEventStore = defineStore('event', () => {
     const live = ref<EventView | null>(null);
     const next = ref<EventView | null>(null);
+    /** Whether the live shift is currently within its customer-facing
+     *  window (online ordering open). False during the post-window flush
+     *  period when the shift is operator-open but customers can't order. */
+    const customerOrderingOpen = ref(false);
+    const closing = ref(false);
+    /** True while an online-ordering toggle request is in flight. */
+    const toggling = ref(false);
     const loading = ref(false);
     const error = ref<string | null>(null);
     const activating = ref(false);
@@ -50,7 +60,9 @@ export const useEventStore = defineStore('event', () => {
     const canActivateNext = computed(() => {
         const n = next.value;
         if (!n) return false;
-        if (n.recurring && !n.startAt) return true; // server computes the slot
+        // Series projection with no concrete window yet — server computes
+        // the slot on activation, so allow the attempt (server re-gates).
+        if (n.fromSeries && !n.startAt) return true;
         if (!n.startAt) return false;
         const start = new Date(n.startAt).getTime();
         return nowTick.value >= start - ACTIVATION_LEAD_MS;
@@ -72,6 +84,7 @@ export const useEventStore = defineStore('event', () => {
             const status = await fetchEventStatus();
             live.value = status.active;
             next.value = status.next;
+            customerOrderingOpen.value = status.customerOrderingOpen;
         } catch (e) {
             error.value =
                 e instanceof ApiError && e.status === 0
@@ -82,7 +95,15 @@ export const useEventStore = defineStore('event', () => {
         }
     }
 
-    async function activate(eventId: string): Promise<boolean> {
+    /**
+     * Activate the given candidate. Branches by type:
+     *  - series projection (fromSeries && no concrete id) → series endpoint,
+     *    which materializes + activates the current-slot occurrence
+     *  - concrete one-time event (has id) → event endpoint
+     *
+     * Surfaces the server's 409 "shift already open" as a friendly message.
+     */
+    async function activate(candidate: EventView): Promise<boolean> {
         const connectivity = useConnectivityStore();
         if (!connectivity.online) {
             error.value = 'Offline — cannot activate an event.';
@@ -91,15 +112,93 @@ export const useEventStore = defineStore('event', () => {
         activating.value = true;
         error.value = null;
         try {
-            await activateEvent(eventId);
-            await load(); // refresh — the activated event should now be live
+            if (candidate.fromSeries && candidate.seriesId && !candidate.id) {
+                await activateSeries(candidate.seriesId);
+            } else if (candidate.id) {
+                await activateEvent(candidate.id);
+            } else if (candidate.seriesId) {
+                // Defensive: series with an id present — still route to series.
+                await activateSeries(candidate.seriesId);
+            } else {
+                error.value = 'Nothing to activate.';
+                return false;
+            }
+            await load(); // refresh — the activated occurrence is now the live shift
             return true;
         } catch (e) {
-            error.value =
-                e instanceof ApiError ? e.message : 'Activation failed.';
+            if (e instanceof ApiError && e.status === 409) {
+                error.value = e.message || 'A shift is already open — close it first.';
+            } else {
+                error.value =
+                    e instanceof ApiError ? e.message : 'Activation failed.';
+            }
             return false;
         } finally {
             activating.value = false;
+        }
+    }
+
+    /**
+     * Close the currently-open shift (operator action). Ends the till
+     * session: the event stops being operator-open, so no further orders
+     * (including late offline flushes) attach to it. Reloads after, which
+     * surfaces the next scheduled event.
+     */
+    async function close(): Promise<boolean> {
+        const current = live.value;
+        if (!current || !current.id) {
+            error.value = 'No open shift to close.';
+            return false;
+        }
+        const connectivity = useConnectivityStore();
+        if (!connectivity.online) {
+            error.value = 'Offline — cannot close the shift until reconnected.';
+            return false;
+        }
+        closing.value = true;
+        error.value = null;
+        try {
+            await closeShift(current.id);
+            await load(); // refresh — shift is now closed, next event surfaces
+            return true;
+        } catch (e) {
+            error.value =
+                e instanceof ApiError ? e.message : 'Could not close the shift.';
+            return false;
+        } finally {
+            closing.value = false;
+        }
+    }
+
+    /**
+     * Switch online ordering on/off for the live shift (operator override).
+     * Subtractive only on the customer side — POS ring-up is unaffected.
+     * Explicit set so the button can't race itself into an ambiguous state.
+     * Reloads after so the derived customerOrderingOpen + stored flag agree.
+     */
+    async function setOnlineOrdering(enabled: boolean): Promise<boolean> {
+        const current = live.value;
+        if (!current || !current.id) {
+            error.value = 'No open shift to update.';
+            return false;
+        }
+        const connectivity = useConnectivityStore();
+        if (!connectivity.online) {
+            error.value = 'Offline — cannot change online ordering until reconnected.';
+            return false;
+        }
+        toggling.value = true;
+        error.value = null;
+        try {
+            await apiSetOnlineOrdering(current.id, enabled);
+            await load(); // refresh — stored flag + derived window state realign
+            return true;
+        } catch (e) {
+            error.value =
+                e instanceof ApiError ? e.message : 'Could not change online ordering.';
+            return false;
+        } finally {
+            toggling.value = false;
         }
     }
 
@@ -129,12 +228,17 @@ export const useEventStore = defineStore('event', () => {
         loading,
         error,
         activating,
+        closing,
+        toggling,
+        customerOrderingOpen,
         eventLive,
         activeEventId,
         canActivateNext,
         activatesInMs,
         load,
         activate,
+        close,
+        setOnlineOrdering,
         start,
         stop,
     };

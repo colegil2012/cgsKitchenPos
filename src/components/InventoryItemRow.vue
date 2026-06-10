@@ -25,7 +25,7 @@ const disabled = computed(() => itemBusy.value || !connectivity.online);
       :class="item.available ? 'on' : 'off'"
       :disabled="disabled"
       @click="inventory.toggleItem(item)">
-      {{ itemBusy ? '…' : item.available ? 'On' : "86'd" }}
+      {{ itemBusy ? '…' : item.available ? 'In' : "Out" }}
     </button>
   </div>
 </template>
@@ -37,9 +37,6 @@ const disabled = computed(() => itemBusy.value || !connectivity.online);
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--color-white);
-  border: 2px solid var(--color-ink);
-  border-radius: var(--radius-md);
 }
 .row.off {
   background: var(--color-paper-2);
