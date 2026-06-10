@@ -19,4 +19,5 @@ exec chromium \
   --force-device-scale-factor=1 \
   --disable-session-crashed-bubble \
   --disable-popup-blocking \
+  --remote-debugging-port=9222 \
   --app=file:///home/druid-pos/cgsKitchenPos/dist/index.html
