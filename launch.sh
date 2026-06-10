@@ -6,7 +6,7 @@
 # =============================================================
 sleep 5
 
-exec chromium \
+exec /usr/lib/chromium/chromium \
   --kiosk \
   --noerrdialogs \
   --disable-infobars \
