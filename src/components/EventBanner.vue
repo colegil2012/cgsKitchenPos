@@ -38,7 +38,7 @@ function fmtWindow(startAt: string | null, endAt: string | null): string {
 
 async function onActivate() {
   if (!next.value) return;
-  await eventStore.activate(next.value.id);
+  await eventStore.activate(next.value);
 }
 </script>
 
@@ -61,9 +61,7 @@ async function onActivate() {
       <div class="next-title">{{ next.title }}</div>
       <div v-if="next.location" class="next-loc">{{ next.location }}</div>
       <div class="next-window">
-        {{ next.recurring && next.recurrenceLabel
-          ? next.recurrenceLabel
-          : fmtWindow(next.startAt, next.endAt) }}
+        {{ next.fromSeries ? 'Weekly' : fmtWindow(next.startAt, next.endAt) }}
       </div>
 
       <button
