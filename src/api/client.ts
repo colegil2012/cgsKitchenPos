@@ -117,6 +117,18 @@ export function fetchActiveOrders(signal?: AbortSignal): Promise<OrderView[]> {
 }
 
 /**
+ * GET /api/orders/{id} — fetch a single order. Used to POLL for the card
+ * result: after collectCardPayment, we re-fetch until status === 'PAID'
+ * (webhook confirmed) or 'CANCELLED'/failure. Reuses the OrderView shape.
+ */
+export function fetchOrder(
+  orderId: string,
+  signal?: AbortSignal,
+): Promise<OrderView> {
+  return request<OrderView>(`/api/orders/${orderId}`, {signal});
+}
+
+/**
  * POST /api/orders/{id}/cash-payment — POS confirms a cash sale. The POS
  * is the payment authority for cash, so this reports a completed payment
  * (PENDING_PAYMENT → PAID) via the dedicated, idempotent server endpoint
@@ -131,6 +143,44 @@ export function confirmCashPayment(
     body: {actor: POS_ACTOR, note: note ?? 'cash payment (POS)'},
   });
 }
+
+/**
+ * POST /api/terminal/collect — create a card-present PaymentIntent for an
+ * existing PENDING_PAYMENT order and push it to the configured reader (S710).
+ * The customer taps/inserts on the reader; the order is marked PAID by the
+ * Stripe webhook, not by this call. Poll fetchOrder() for the result.
+ *
+ * Online-only — there's no offline queueing for card (a card charge needs a
+ * live round-trip to Stripe and the reader).
+ */
+export function collectCardPayment(orderId: string): Promise<CollectResponse> {
+  return request<CollectResponse>('/api/terminal/collect', {
+    method: 'POST',
+    body: {orderId},
+    // Generous timeout: this returns once the reader ACCEPTS the action
+    // (starts prompting), not when the customer finishes paying.
+    timeoutMs: 20000,
+  });
+}
+
+
+
+/**
+ * POST /api/terminal/cancel — clear the in-progress prompt on the reader when
+ * the cashier aborts before the customer presents a card.
+ */
+export function cancelCardPayment(): Promise<{status: string}> {
+  return request<{status: string}>('/api/terminal/cancel', {method: 'POST'});
+}
+
+
+export interface CollectResponse {
+  orderId: string;
+  paymentIntentId: string;
+  readerStatus: string;
+  readerId: string;
+}
+
 
 /** Lightweight connectivity probe. Resolves true iff the server answers ok. */
 export async function heartbeat(): Promise<boolean> {

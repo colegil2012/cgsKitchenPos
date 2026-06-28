@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import {ref} from 'vue';
+import {ref, onBeforeUnmount} from 'vue';
 import {useCartStore} from '../stores/cart';
 import {useConnectivityStore} from '../stores/connectivity';
 import {useSyncStore} from '../stores/sync';
 import {useEventStore} from '../stores/event';
-import {lookupCustomer} from '../api/client';
+import {
+  lookupCustomer,
+  collectCardPayment,
+  cancelCardPayment,
+  fetchOrder,
+  ApiError,
+} from '../api/client';
 import {
   selectionSummary,
   unitPriceCents,
@@ -82,10 +88,154 @@ async function payCash() {
     submitting.value = false;
   }
 }
+
+// ---- card payment (server-driven Terminal / S710) -----------------------
+// Card is ONLINE-ONLY and asynchronous: create the order, push it to the
+// reader, then poll the order until the webhook flips it to PAID.
+
+type CardPhase =
+  | 'idle'
+  | 'creating'   // creating the order on the server
+  | 'collecting' // reader is prompting; customer taps/inserts
+  | 'failed';
+const cardPhase = ref<CardPhase>('idle');
+const cardError = ref<string | null>(null);
+let pollTimer: number | undefined;
+let pollDeadline = 0;
+let activeCardOrderId: string | null = null;
+
+const POLL_INTERVAL_MS = 2000;
+const POLL_TIMEOUT_MS = 90000; // ~90s for the customer to present a card
+
+function stopPolling() {
+  if (pollTimer !== undefined) {
+    clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+}
+
+async function payCard() {
+  if (cart.lines.length === 0) return;
+  if (!eventStore.activeEventId) return;
+  // Card needs connectivity — no offline queueing.
+  if (!connectivity.online) {
+    cardError.value = 'Card payments need a connection. Use cash while offline.';
+    cardPhase.value = 'failed';
+    return;
+  }
+
+  cardError.value = null;
+  cardPhase.value = 'creating';
+  const total = cart.totalCents;
+
+  try {
+    // 1) Create the order on the server (PENDING_PAYMENT). Cart is preserved
+    //    until the card actually succeeds, so a decline is recoverable.
+    const orderId = await cart.createCardOrder(
+      eventStore.activeEventId,
+      attached.value,
+    );
+    activeCardOrderId = orderId;
+
+    // 2) Push the intent to the reader.
+    cardPhase.value = 'collecting';
+    await collectCardPayment(orderId);
+
+    // 3) Poll the order until the webhook marks it PAID (or we time out).
+    pollDeadline = Date.now() + POLL_TIMEOUT_MS;
+    stopPolling();
+    pollTimer = window.setInterval(async () => {
+      if (Date.now() > pollDeadline) {
+        stopPolling();
+        cardError.value =
+          'Timed out waiting for payment. Check the reader, or cancel and retry.';
+        cardPhase.value = 'failed';
+        return;
+      }
+      try {
+        const order = await fetchOrder(orderId);
+        if (order.status === 'PAID') {
+          stopPolling();
+          cart.clear();
+          clearCustomer();
+          activeCardOrderId = null;
+          cardPhase.value = 'idle';
+          emit('paid', {queued: false, totalCents: total});
+        } else if (
+          order.status === 'CANCELLED' ||
+          order.status === 'REFUNDED'
+        ) {
+          stopPolling();
+          cardError.value = 'Payment was cancelled.';
+          cardPhase.value = 'failed';
+        }
+        // else still PENDING_PAYMENT — keep polling.
+      } catch {
+        // Transient fetch error — keep polling until the deadline.
+      }
+    }, POLL_INTERVAL_MS);
+  } catch (e) {
+    const msg =
+      e instanceof ApiError
+        ? e.status === 0
+          ? 'Lost connection during card payment.'
+          : e.message
+        : 'Could not start the card payment.';
+    cardError.value = msg;
+    cardPhase.value = 'failed';
+  }
+}
+
+/** Cashier aborts: clear the reader prompt and reset. The order stays
+ *  PENDING_PAYMENT on the server (can be paid by cash or retried). */
+async function cancelCard() {
+  stopPolling();
+  try {
+    await cancelCardPayment();
+  } catch {
+    /* reader may already be idle — ignore */
+  }
+  activeCardOrderId = null;
+  cardPhase.value = 'idle';
+  cardError.value = null;
+}
+
+function dismissCardError() {
+  cardPhase.value = 'idle';
+  cardError.value = null;
+}
+
+onBeforeUnmount(stopPolling);
 </script>
 
 <template>
   <div class="overlay">
+    <!-- Card payment status overlay (server-driven Terminal / S710) -->
+    <div v-if="cardPhase !== 'idle'" class="card-modal">
+      <div class="card-box">
+        <template v-if="cardPhase === 'creating'">
+          <div class="spinner" />
+          <p class="card-head">Starting payment…</p>
+        </template>
+        <template v-else-if="cardPhase === 'collecting'">
+          <div class="reader-pulse" />
+          <p class="card-head">Present card on reader</p>
+          <p class="card-sub">Tap, insert, or swipe on the terminal.</p>
+          <button class="card-cancel tap" @click="cancelCard">Cancel</button>
+        </template>
+        <template v-else-if="cardPhase === 'failed'">
+          <p class="card-head fail">Payment not completed</p>
+          <p class="card-sub">{{ cardError }}</p>
+          <div class="card-actions">
+            <button class="card-retry tap" @click="payCard">Try again</button>
+            <button class="card-dismiss tap" @click="dismissCardError">
+              Back to order
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <div class="topbar">
       <button class="link tap" @click="emit('close')">‹ Menu</button>
       <span class="title">Current Order</span>
@@ -170,6 +320,16 @@ async function payCash() {
           :loading="submitting"
           :disabled="!eventStore.activeEventId"
           @click="payCash" />
+        <AppButton
+          :label="`Pay Card · ${money(cart.totalCents)}`"
+          variant="primary"
+          :disabled="!eventStore.activeEventId || !connectivity.online"
+          @click="payCard" />
+        <p
+          v-if="!connectivity.online"
+          class="card-offline-note">
+          Card needs a connection — cash only while offline.
+        </p>
       </div>
     </template>
   </div>
@@ -388,5 +548,94 @@ async function payCash() {
 }
 .footer :deep(.btn) {
   width: 100%;
+}
+.card-offline-note {
+  font-size: 12px;
+  color: var(--color-muted);
+  text-align: center;
+  margin: 8px 0 0;
+}
+/* Card payment overlay */
+.card-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(38, 24, 18, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  padding: 24px;
+}
+.card-box {
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.card-head {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-ink);
+  margin: 0;
+}
+.card-head.fail {
+  color: var(--color-danger);
+}
+.card-sub {
+  font-size: 14px;
+  color: var(--color-muted);
+  margin: 0;
+}
+.reader-pulse {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-orange);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(0.85); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+.card-cancel {
+  margin-top: 8px;
+  min-height: 44px;
+  padding: 0 20px;
+  background: transparent;
+  color: var(--color-danger);
+  border: 1.5px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 14px;
+}
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+.card-retry {
+  min-height: 48px;
+  background: var(--color-orange);
+  color: var(--color-white);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 16px;
+}
+.card-dismiss {
+  min-height: 44px;
+  background: transparent;
+  color: var(--color-muted);
+  font-weight: 600;
+  font-size: 14px;
 }
 </style>
