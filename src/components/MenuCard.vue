@@ -5,14 +5,20 @@ import {money, badgeColor} from '../lib/format';
 const props = defineProps<{item: MenuItemView}>();
 defineEmits<{(e: 'select', item: MenuItemView): void}>();
 
-const hasOptions = props.item.optionGroups.length > 0;
-</script>
+const hasOptions = props.item.optionGroups.length > 0;</script>
 
 <template>
-  <button class="card tap" @click="$emit('select', item)">
+  <button
+    class="card tap"
+    :class="{unavail: !item.available}"
+    :disabled="!item.available"
+    @click="item.available && $emit('select', item)">
     <div class="top">
       <span
-        v-if="item.badgeLabel"
+        v-if="!item.available"
+        class="badge badge-86">86'D</span>
+      <span
+        v-else-if="item.badgeLabel"
         class="badge"
         :style="{background: badgeColor(item.badgeColor)}">
         {{ item.badgeLabel.toUpperCase() }}
@@ -22,7 +28,9 @@ const hasOptions = props.item.optionGroups.length > 0;
     </div>
     <div class="name">{{ item.name }}</div>
     <div v-if="item.description" class="desc">{{ item.description }}</div>
-    <div class="cta">{{ hasOptions ? 'Customize ›' : 'Add ›' }}</div>
+    <div class="cta">
+      {{ !item.available ? 'Unavailable' : hasOptions ? 'Customize ›' : 'Add ›' }}
+    </div>
   </button>
 </template>
 
@@ -44,6 +52,19 @@ const hasOptions = props.item.optionGroups.length > 0;
 .card:active {
   background: var(--color-paper-3);
   border-color: var(--color-gold-darker);
+}
+.card.unavail {
+  opacity: 0.55;
+  border-style: dashed;
+  border-color: var(--color-border-strong, var(--color-border));
+  box-shadow: none;
+}
+.card.unavail:active {
+  background: var(--color-white);
+  border-color: var(--color-border);
+}
+.badge-86 {
+  background: var(--color-danger);
 }
 .top {
   display: flex;

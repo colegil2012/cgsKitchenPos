@@ -3,6 +3,16 @@ import {ref, computed} from 'vue';
 import {fetchActiveOrders, updateOrderStatus, ApiError} from '../api/client';
 import type {OrderView} from '../types/menu';
 import {useConnectivityStore} from './connectivity';
+import {useSyncStore} from './sync';
+
+/** A queued offline order, projected for read-only display on the board. */
+export interface PendingOrder {
+    clientId: string;
+    enqueuedAt: string;
+    items: {name: string; quantity: number; unitPriceCents: number}[];
+    totalCents: number;
+    customerName: string | null;
+}
 
 /**
  * Kitchen board state. Polls GET /api/orders/active and groups orders into
@@ -48,6 +58,40 @@ export const useOrdersStore = defineStore('orders', () => {
             // on the kitchen board — it's past the kitchen's hands.
         }
         return cols;
+    });
+
+    /**
+     * Queued offline orders projected for the board — read-only "pending
+     * sync" cards. Derived reactively from the sync queue, so when an op
+     * flushes and leaves the queue, its card disappears automatically (right
+     * as the real server order arrives on the next poll — self-reconciling,
+     * no duplicate). Only cash create_order ops are shown; status ops aren't
+     * orders. Newest last, matching enqueue order.
+     */
+    const pendingOrders = computed<PendingOrder[]>(() => {
+        const sync = useSyncStore();
+        const out: PendingOrder[] = [];
+        for (const op of sync.pending) {
+            if (op.kind !== 'create_order') continue;
+            const req = (op.payload as {request: any}).request;
+            const items = (req.items ?? []).map((i: any) => ({
+                name: i.name,
+                quantity: i.quantity,
+                unitPriceCents: i.unitPriceCents,
+            }));
+            const totalCents = items.reduce(
+                (n: number, i: any) => n + i.unitPriceCents * i.quantity,
+                0,
+            );
+            out.push({
+                clientId: op.clientId,
+                enqueuedAt: op.enqueuedAt,
+                items,
+                totalCents,
+                customerName: req.customerName ?? null,
+            });
+        }
+        return out;
     });
 
     /**
@@ -162,6 +206,7 @@ export const useOrdersStore = defineStore('orders', () => {
         lastUpdated,
         working,
         byColumn,
+        pendingOrders,
         nextStep,
         load,
         startPolling,

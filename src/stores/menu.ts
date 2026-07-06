@@ -25,11 +25,23 @@ export const useMenuStore = defineStore('menu', () => {
   const stale = ref(false);
   const cachedAt = ref<number | null>(null);
   const error = ref<string | null>(null);
+  /** Free-text search over item names/descriptions. Empty = no filter. */
+  const search = ref('');
 
+  /**
+   * Categories with their items. 86'd items are now INCLUDED (shown greyed
+   * in the UI) rather than hidden, so staff can see what's out — matching how
+   * unavailable option choices are surfaced. Search filters by name and
+   * description; a category with no matches is dropped.
+   */
   const sections = computed<MenuSection[]>(() => {
+    const q = search.value.trim().toLowerCase();
     const map = new Map<string, MenuSection>();
     for (const item of items.value) {
-      if (!item.available) continue;
+      if (q) {
+        const hay = `${item.name} ${item.description ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
       const key = item.categoryName || 'Other';
       if (!map.has(key)) {
         map.set(key, {categoryName: key, sortKey: item.sortOrder, items: []});
@@ -37,10 +49,20 @@ export const useMenuStore = defineStore('menu', () => {
       map.get(key)!.items.push(item);
     }
     const arr = [...map.values()];
-    arr.forEach(s => s.items.sort((a, b) => a.sortOrder - b.sortOrder));
+    // Available first within a category, then by sortOrder — keeps 86'd items
+    // visible but out of the way at the bottom of their section.
+    arr.forEach(s =>
+      s.items.sort((a, b) => {
+        if (a.available !== b.available) return a.available ? -1 : 1;
+        return a.sortOrder - b.sortOrder;
+      }),
+    );
     arr.sort((a, b) => a.sortKey - b.sortKey);
     return arr;
   });
+
+  /** Category names in display order — for the quick-jump chips. */
+  const categoryNames = computed(() => sections.value.map(s => s.categoryName));
 
   async function loadFromCache() {
     const cached = await kvGet<MenuItemView[]>(CACHE_KEY);
@@ -82,5 +104,5 @@ export const useMenuStore = defineStore('menu', () => {
     return items.value.find(i => i.id === id);
   }
 
-  return {items, loading, stale, cachedAt, error, sections, load, findById};
+  return {items, loading, stale, cachedAt, error, search, sections, categoryNames, load, findById};
 });

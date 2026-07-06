@@ -3,6 +3,7 @@ import {onMounted, onUnmounted} from 'vue';
 import {useOrdersStore, type BoardColumn} from '../stores/orders';
 import {useConnectivityStore} from '../stores/connectivity';
 import OrderCard from '../components/OrderCard.vue';
+import PendingOrderCard from '../components/PendingOrderCard.vue';
 
 const orders = useOrdersStore();
 const connectivity = useConnectivityStore();
@@ -40,14 +41,28 @@ onUnmounted(() => orders.stopPolling());
       <section v-for="col in columns" :key="col.key" class="column">
         <div class="col-head">
           <span class="col-title">{{ col.title }}</span>
-          <span class="count">{{ orders.byColumn[col.key].length }}</span>
+          <span class="count">
+            {{ orders.byColumn[col.key].length +
+               (col.key === 'PAID' ? orders.pendingOrders.length : 0) }}
+          </span>
         </div>
         <div class="scroll col-body">
+          <!-- Queued offline orders sit at the top of the New column,
+               read-only until they sync and become real server orders. -->
+          <template v-if="col.key === 'PAID'">
+            <PendingOrderCard
+              v-for="p in orders.pendingOrders"
+              :key="p.clientId"
+              :order="p" />
+          </template>
           <OrderCard
             v-for="o in orders.byColumn[col.key]"
             :key="o.id"
             :order="o" />
-          <p v-if="orders.byColumn[col.key].length === 0" class="empty">
+          <p
+            v-if="orders.byColumn[col.key].length === 0 &&
+                  !(col.key === 'PAID' && orders.pendingOrders.length)"
+            class="empty">
             None
           </p>
         </div>

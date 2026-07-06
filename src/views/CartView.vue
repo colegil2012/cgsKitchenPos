@@ -21,7 +21,10 @@ import {money} from '../lib/format';
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'paid', info: {queued: boolean; totalCents: number}): void;
+  (
+    e: 'paid',
+    info: {method: 'cash' | 'card'; queued: boolean; totalCents: number},
+  ): void;
 }>();
 
 const cart = useCartStore();
@@ -80,10 +83,14 @@ async function payCash() {
     // attached (if set) attributes the sale to a registered customer.
     const req = cart.toOrderRequest(eventStore.activeEventId, attached.value);
     await sync.enqueueCashOrder(req);
-    const queued = !connectivity.online || sync.pendingCount > 0;
+    // "Queued" means THIS sale couldn't reach the server and is waiting to
+    // sync — i.e. we're offline. It must NOT depend on unrelated items already
+    // in the queue (an online sale is still an online sale even if the queue
+    // holds older entries).
+    const queued = !connectivity.online;
     cart.clear();
     clearCustomer();
-    emit('paid', {queued, totalCents: total});
+    emit('paid', {method: 'cash', queued, totalCents: total});
   } finally {
     submitting.value = false;
   }
@@ -160,7 +167,7 @@ async function payCard() {
           clearCustomer();
           activeCardOrderId = null;
           cardPhase.value = 'idle';
-          emit('paid', {queued: false, totalCents: total});
+          emit('paid', {method: 'card', queued: false, totalCents: total});
         } else if (
           order.status === 'CANCELLED' ||
           order.status === 'REFUNDED'
@@ -314,17 +321,19 @@ onBeforeUnmount(stopPolling);
         <p v-if="!eventStore.activeEventId" class="no-event-note">
           No active event — activate one on the Events tab before taking orders.
         </p>
-        <AppButton
-          :label="`Pay Cash · ${money(cart.totalCents)}`"
-          variant="success"
-          :loading="submitting"
-          :disabled="!eventStore.activeEventId"
-          @click="payCash" />
-        <AppButton
-          :label="`Pay Card · ${money(cart.totalCents)}`"
-          variant="primary"
-          :disabled="!eventStore.activeEventId || !connectivity.online"
-          @click="payCard" />
+        <div class="pay-btn-container">
+          <AppButton
+            :label="`Pay Cash · ${money(cart.totalCents)}`"
+            variant="success"
+            :loading="submitting"
+            :disabled="!eventStore.activeEventId"
+            @click="payCash" />
+          <AppButton
+            :label="`Pay Card · ${money(cart.totalCents)}`"
+            variant="primary"
+            :disabled="!eventStore.activeEventId || !connectivity.online"
+            @click="payCard" />
+        </div>
         <p
           v-if="!connectivity.online"
           class="card-offline-note">
@@ -600,6 +609,18 @@ onBeforeUnmount(stopPolling);
   border-radius: 50%;
   background: var(--color-orange);
   animation: pulse 1.2s ease-in-out infinite;
+}
+.pay-btn-container {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+/* Override the footer's default full-width button rule so the two pay
+   buttons share the row evenly. :deep pierces into AppButton's root. */
+.pay-btn-container :deep(.btn) {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
 }
 @keyframes pulse {
   0%, 100% { transform: scale(0.85); opacity: 0.6; }

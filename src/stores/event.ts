@@ -10,6 +10,14 @@ import {
     type EventView,
 } from '../api/client';
 import {useConnectivityStore} from './connectivity';
+import {kvGet, kvSet} from '../lib/db';
+
+/** IndexedDB key for the cached live event (survives offline + kiosk reload). */
+const LIVE_EVENT_CACHE_KEY = 'live_event_cache';
+/** Grace period after an event's endAt during which a cached event is still
+ *  honored offline — covers late close-out / flush while parked at the event.
+ *  Beyond this, a cached event is considered stale and ignored. */
+const CACHE_STALE_GRACE_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 /**
  * Event lifecycle for the POS.
@@ -85,6 +93,14 @@ export const useEventStore = defineStore('event', () => {
             live.value = status.active;
             next.value = status.next;
             customerOrderingOpen.value = status.customerOrderingOpen;
+            // Cache the live event so cash can still ring up if the backend
+            // becomes unreachable or the kiosk reloads while offline. We only
+            // overwrite the cache on a SUCCESSFUL poll, so a failed poll never
+            // clobbers a good cached event.
+            void kvSet(LIVE_EVENT_CACHE_KEY, {
+                event: status.active,
+                cachedAt: Date.now(),
+            });
         } catch (e) {
             error.value =
                 e instanceof ApiError && e.status === 0
@@ -202,9 +218,44 @@ export const useEventStore = defineStore('event', () => {
         }
     }
 
+    /**
+     * Hydrate the live event from IndexedDB cache on startup, BEFORE the
+     * first network poll. This is what lets cash ring up offline: if the
+     * backend is unreachable (or the kiosk just reloaded with no network),
+     * we still know which event is live from the last successful poll.
+     *
+     * Staleness guard: a cached event whose endAt is more than
+     * CACHE_STALE_GRACE_MS in the past is ignored — we don't want a sale
+     * binding to last week's event. An event with no endAt (open-ended) is
+     * always honored while cached.
+     */
+    async function hydrateFromCache(): Promise<void> {
+        // Don't clobber a value a live poll may have already set.
+        if (live.value) return;
+        try {
+            const cached = await kvGet<{event: EventView | null; cachedAt: number}>(
+                LIVE_EVENT_CACHE_KEY,
+            );
+            if (!cached || !cached.event) return;
+            const ev = cached.event;
+            if (ev.endAt) {
+                const endedAt = new Date(ev.endAt).getTime();
+                if (Date.now() - endedAt > CACHE_STALE_GRACE_MS) {
+                    // Stale — an old event we shouldn't ring against anymore.
+                    return;
+                }
+            }
+            live.value = ev;
+        } catch {
+            // Cache miss / read error — proceed; the poll will populate.
+        }
+    }
+
     function start(pollMs = 20000) {
         if (pollTimer !== undefined) return;
-        load(true);
+        // Hydrate cached event first so cash works even if the first poll
+        // fails (backend down). The poll, when it succeeds, refreshes + re-caches.
+        void hydrateFromCache().then(() => load(true));
         pollTimer = window.setInterval(() => load(false), pollMs);
         tickTimer = window.setInterval(() => {
             nowTick.value = Date.now();
@@ -236,6 +287,7 @@ export const useEventStore = defineStore('event', () => {
         canActivateNext,
         activatesInMs,
         load,
+        hydrateFromCache,
         activate,
         close,
         setOnlineOrdering,

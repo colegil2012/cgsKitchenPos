@@ -140,7 +140,6 @@ onMounted(() => {
 .block-title {
   font-size: var(--fs-3xl);
   color: var(--color-gold-dark);
-  border-left: 4px solid var(--color-grass-dark);
   padding: 24px 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;

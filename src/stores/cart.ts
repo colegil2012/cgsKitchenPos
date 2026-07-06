@@ -37,26 +37,6 @@ export const useCartStore = defineStore('cart', () => {
     lines.value = [];
   }
 
-  /**
- * Create the order on the server for a CARD payment and return its id.
- * Unlike the cash path this does NOT clear the cart — we keep the cart intact
- * until the card actually succeeds, so a decline/cancel leaves the order
- * recoverable and the cashier can retry or switch to cash. CartView clears on
- * confirmed payment.
- *
- * Throws (ApiError) if offline or the create fails — card is online-only and
- * the caller surfaces the error.
- */
-async function createCardOrder(
-  eventId: string | null,
-  customer?: {userId: string; customerName: string | null} | null,
-): Promise<string> {
-  const req = toOrderRequest(eventId, customer);
-  const order = await createPosOrder(req);
-  return order.id;
-}
-
-
   function toOrderRequest(
     eventId: string | null,
     customer?: {userId: string; customerName: string | null} | null,
@@ -68,6 +48,25 @@ async function createCardOrder(
       customerName: customer?.customerName ?? null,
       customerEmail: null,
     };
+  }
+
+  /**
+   * Create the order on the server for a CARD payment and return its id.
+   * Unlike the cash path this does NOT clear the cart — we keep the cart
+   * intact until the card actually succeeds, so a decline/cancel leaves the
+   * order recoverable and the cashier can retry or switch to cash. CartView
+   * clears on confirmed payment.
+   *
+   * Throws (ApiError) if offline or the create fails — card is online-only
+   * and the caller surfaces the error.
+   */
+  async function createCardOrder(
+    eventId: string | null,
+    customer?: {userId: string; customerName: string | null} | null,
+  ): Promise<string> {
+    const req = toOrderRequest(eventId, customer);
+    const order = await createPosOrder(req);
+    return order.id;
   }
 
   return {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {onMounted} from 'vue';
+import {onMounted, ref} from 'vue';
 import {useMenuStore} from '../stores/menu';
 import {useCartStore} from '../stores/cart';
 import type {MenuItemView} from '../types/menu';
@@ -15,6 +15,16 @@ defineEmits<{
 
 const menu = useMenuStore();
 const cart = useCartStore();
+
+const bodyEl = ref<HTMLElement | null>(null);
+
+/** Scroll a category section into view when its chip is tapped. */
+function jumpTo(categoryName: string) {
+  const el = bodyEl.value?.querySelector(
+    `[data-cat="${CSS.escape(categoryName)}"]`,
+  );
+  el?.scrollIntoView({behavior: 'smooth', block: 'start'});
+}
 
 onMounted(() => {
   if (menu.items.length === 0) menu.load();
@@ -39,16 +49,57 @@ onMounted(() => {
       <AppButton label="Retry" @click="menu.load()" />
     </div>
 
-    <div v-else class="scroll body">
-      <section v-for="section in menu.sections" :key="section.categoryName" class="section">
-        <h2 class="section-title">{{ section.categoryName }}</h2>
-        <div class="grid">
-          <div v-for="mi in section.items" :key="mi.id" class="cell">
-            <MenuCard :item="mi" @select="$emit('select', $event)" />
-          </div>
+    <template v-else>
+      <!-- Search + category quick-jump: the two rush-time navigation aids. -->
+      <div class="toolbar">
+        <div class="search">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input
+            v-model="menu.search"
+            class="search-input"
+            type="text"
+            inputmode="search"
+            placeholder="Search menu…"
+            aria-label="Search menu" />
+          <button
+            v-if="menu.search"
+            class="search-clear tap"
+            aria-label="Clear search"
+            @click="menu.search = ''">
+            ✕
+          </button>
         </div>
-      </section>
-    </div>
+        <div v-if="!menu.search && menu.categoryNames.length > 1" class="chips">
+          <button
+            v-for="cat in menu.categoryNames"
+            :key="cat"
+            class="chip tap"
+            @click="jumpTo(cat)">
+            {{ cat }}
+          </button>
+        </div>
+      </div>
+
+      <div ref="bodyEl" class="scroll body">
+        <section
+          v-for="section in menu.sections"
+          :key="section.categoryName"
+          :data-cat="section.categoryName"
+          class="section">
+          <h2 class="section-title">{{ section.categoryName }}</h2>
+          <div class="grid">
+            <div v-for="mi in section.items" :key="mi.id" class="cell">
+              <MenuCard :item="mi" @select="$emit('select', $event)" />
+            </div>
+          </div>
+        </section>
+
+        <div v-if="menu.sections.length === 0" class="center no-results">
+          <p class="muted">No items match “{{ menu.search }}”.</p>
+          <AppButton label="Clear search" variant="ghost" @click="menu.search = ''" />
+        </div>
+      </div>
+    </template>
 
     <div v-if="cart.count > 0" class="cartbar">
       <div>
@@ -86,6 +137,69 @@ onMounted(() => {
   color: var(--color-muted);
   text-align: center;
   max-width: 30ch;
+}
+.toolbar {
+  padding: 12px 12px 8px;
+  background: var(--color-paper);
+  border-bottom: 1px solid var(--color-border);
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-white);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  height: 48px;
+}
+.search-icon {
+  font-size: 20px;
+  color: var(--color-muted);
+}
+.search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  color: var(--color-ink);
+  outline: none;
+  height: 100%;
+}
+.search-clear {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-top: 10px;
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  background: var(--color-paper-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+.no-results {
+  padding-top: 48px;
+  gap: 16px;
 }
 .body {
   flex: 1;
@@ -138,7 +252,7 @@ onMounted(() => {
   width: 40px;
   height: 40px;
   border: 4px solid var(--color-paper-2);
-  border-top-color: var(--color-grass-dark);
+  border-top-color: var(--color-orange);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

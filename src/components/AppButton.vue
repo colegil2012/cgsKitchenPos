@@ -41,7 +41,7 @@ defineEmits<{(e: 'click'): void}>();
   color: var(--color-white);
 }
 .btn--success {
-  background: var(--color-grass-dark);
+  background: var(--color-gold-darker);
   color: var(--color-white);
 }
 .btn--ghost {

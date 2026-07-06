@@ -23,7 +23,11 @@ const eventStore = useEventStore();
 const tab = ref<Tab>('menu');
 const selectedItem = ref<MenuItemView | null>(null);
 const cartOpen = ref(false);
-const paid = ref<{queued: boolean; totalCents: number} | null>(null);
+const paid = ref<{
+  method: 'cash' | 'card';
+  queued: boolean;
+  totalCents: number;
+} | null>(null);
 
 onMounted(async () => {
   await sync.refresh();
@@ -104,6 +108,7 @@ const navItems: {key: Tab; label: string; icon: string}[] = [
 
       <PaidView
         v-if="paid"
+        :method="paid.method"
         :queued="paid.queued"
         :total-cents="paid.totalCents"
         @new-order="paid = null" />
