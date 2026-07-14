@@ -39,8 +39,16 @@ const ageMin = computed(() => {
 
     <div class="items">
       <div v-for="(it, i) in order.items" :key="i" class="item">
-        <span class="qty">{{ it.quantity }}×</span>
-        <span class="name">{{ it.name }}</span>
+        <div class="item-head">
+          <span class="qty">{{ it.quantity }}×</span>
+          <span class="name">{{ it.name }}</span>
+        </div>
+        <div
+          v-if="it.modifiers && it.modifiers.length"
+          class="item-mods">
+          {{ it.modifiers.join(', ') }}
+        </div>
+        <div v-if="it.notes" class="item-note">⚑ {{ it.notes }}</div>
       </div>
     </div>
 
@@ -107,9 +115,25 @@ const ageMin = computed(() => {
 }
 .item {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
   font-size: 14px;
   line-height: 1.3;
+}
+.item-head {
+  display: flex;
+  gap: 6px;
+}
+.item-mods {
+  font-size: 12px;
+  color: var(--color-muted);
+  padding-left: 22px;
+}
+.item-note {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-orange);
+  padding-left: 22px;
 }
 .qty {
   color: var(--color-orange);

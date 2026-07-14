@@ -10,6 +10,8 @@ export interface CartLine {
   item: MenuItemView;
   selections: Record<string, string[]>;
   quantity: number;
+  /** Free-text special instructions for this line (e.g. "no onions"). */
+  note?: string;
 }
 
 export const TAX_RATE = 0.07; // matches PosApiController.createPosOrder
@@ -67,12 +69,14 @@ export function selectionLabels(line: CartLine): string[] {
  * kept for on-screen display only — never for submission.
  */
 export function toPosLineItem(line: CartLine): PosLineItem {
+  const note = line.note?.trim();
   return {
     menuItemId: line.item.id,
     name: line.item.name,
     quantity: line.quantity,
     unitPriceCents: unitPriceCents(line),
     modifiers: selectionLabels(line),
+    notes: note ? note : null,
   };
 }
 

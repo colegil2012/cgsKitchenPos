@@ -52,7 +52,8 @@ export interface PosLineItem {
   name: string;
   quantity: number;
   unitPriceCents: number;
-  modifiers?: string[]; // for future use: flattened choice labels for display/reference; not sent to server yet
+  modifiers?: string[]; // flattened "Group: Choice" labels, sent to the server
+  notes?: string | null; // free-text special instructions for this line
 }
 
 export interface PosOrderRequest {
@@ -78,6 +79,8 @@ export interface OrderView {
     name: string;
     quantity: number;
     unitPriceCents: number;
+    modifiers?: string[];
+    notes?: string | null;
   }>;
 }
 

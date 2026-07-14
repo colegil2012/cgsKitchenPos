@@ -268,6 +268,7 @@ onBeforeUnmount(stopPolling);
             <div v-if="selectionSummary(line)" class="opts">
               {{ selectionSummary(line).trim() }}
             </div>
+            <div v-if="line.note" class="line-note">“{{ line.note }}”</div>
             <div class="unit">{{ money(unitPriceCents(line)) }} each</div>
           </div>
           <div class="right">
@@ -408,6 +409,12 @@ onBeforeUnmount(stopPolling);
 .opts {
   font-size: 14px;
   color: var(--color-gold-dark);
+  margin-top: 2px;
+}
+.line-note {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--color-orange);
   margin-top: 2px;
 }
 .unit {

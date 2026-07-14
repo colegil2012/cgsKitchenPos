@@ -20,12 +20,14 @@ const emit = defineEmits<{(e: 'close'): void}>();
 const cart = useCartStore();
 const selections = ref<Record<string, string[]>>(defaultSelections(props.item));
 const qty = ref(1);
+const note = ref('');
 
 const previewLine = computed<CartLine>(() => ({
   lineId: 'preview',
   item: props.item,
   selections: selections.value,
   quantity: qty.value,
+  note: note.value.trim() || undefined,
 }));
 
 const unit = computed(() => unitPriceCents(previewLine.value));
@@ -45,6 +47,7 @@ function add() {
     item: props.item,
     selections: selections.value,
     quantity: qty.value,
+    note: note.value.trim() || undefined,
   });
   emit('close');
 }
@@ -71,6 +74,17 @@ function add() {
         :group="group"
         :selected="selections[group.id] ?? []"
         @change="ids => setGroup(group.id, ids)" />
+
+      <div class="note-field">
+        <label class="note-label" for="line-note">Special instructions</label>
+        <textarea
+          id="line-note"
+          v-model="note"
+          class="note-input"
+          rows="2"
+          maxlength="200"
+          placeholder="e.g. no onions, allergy note, extra crispy…" />
+      </div>
 
       <div class="qty-row">
         <span class="qty-label">Quantity</span>
@@ -146,6 +160,35 @@ function add() {
   font-weight: 800;
   color: var(--color-gold-dark);
   margin-top: 12px;
+}
+.note-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 20px;
+}
+.note-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.note-input {
+  width: 100%;
+  resize: none;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  padding: 10px 12px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--color-ink);
+  outline: none;
+}
+.note-input:focus {
+  border-color: var(--color-orange);
+}
+.note-input::placeholder {
+  color: var(--color-muted);
 }
 .qty-row {
   display: flex;
