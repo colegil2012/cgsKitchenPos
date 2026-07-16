@@ -92,7 +92,7 @@ export function fetchMenu(signal?: AbortSignal): Promise<MenuItemView[]> {
 }
 
 export function createPosOrder(body: PosOrderRequest): Promise<OrderView> {
-  return request<OrderView>('/api/pos/orders', {method: 'POST', body});
+  return request<OrderView>('/api/orders/create', {method: 'POST', body});
 }
 
 export function updateOrderStatus(
